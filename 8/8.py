@@ -1,113 +1,90 @@
-import functools
-
 visible = []
-
-# memoize
-@functools.cache
-def get_length(x):
-    return len(x) - 1
-
-
-# find closest edge before running search direction functions
-def edge_distances(icoord, jcoord):
-    dists = {}
-    dists["up"] = icoord / height
-    dists["left"] = jcoord / length
-    dists["down"] = 1 - dists["up"]
-    dists["right"] = 1 - dists["left"]
-    return dict(sorted(dists.items(), key=lambda dists: dists[1]))
-
-
-# Main search loop - Run search functions based on distance, break if func returns true
-#   for keys in closest():
-#     if search_funcs[key]():
-#       append (ii, ij) to visible
-#       break
-
-# bool check_right: increment j, if node is larger, continue
-# bool check_left: decrement j, if node is larger, continue
-# bool check_up: decrement i, if node is larger, continue
-# bool check_down: increment i, if node is larger, continue
-
-
-def direction(x, op):
-    return op(x)
-
-
-def search(val, origin_index, cur_index, forest, direction_func, dir):
-    print(
-        "searching",
-        val,
-        "at",
-        origin_index,
-        "current index",
-        cur_index,
-        "direction",
-        dir,
-    )
-    next_index = direction(cur_index, direction_func)
-    # if vert: increment/decrement first i, second is static
-    # if horiz: first i is static, increment/decrement second index
-    if forest[origin_index if dir == "horiz" else next_index][
-        origin_index if dir == "vert" else next_index
-    ]:
-        if (
-            forest[origin_index if dir == "horiz" else next_index][
-                origin_index if dir == "vert" else next_index
-            ]
-            < val
-        ):
-            search(val, origin_index, next_index, forest, direction_func, dir)
-        else:
-            return False
-    else:
-        return True
-
-
-# strict horizontal search
-# def search_horiz(val, cur_index, next_index, line, direction):
-#   next_index = direction(cur_index)
-#   if line[next_index]:
-#     if line[next_index] < val:
-#       search_horiz(val, next_index, direction(next_index), line, direction)
-#     else:
-#       return False
-#   else:
-#     return True
-
-# map search functions to labels
-search_lambdas = {
-    "up": (lambda a: a + 1),
-    "left": (lambda a: a - 1),
-    "down": (lambda a: a + 1),
-    "right": (lambda a: a + 1),
-}
-
 forest = []
-# build forest
+
 with open("input.txt", "r+") as file:
-    length = 0
-    height = 0
     for line in file:
-        height += 1
-        length = get_length(line)
         forest.append(list(map(int, line.strip())))
 
-print(forest)
+
+def find_indices(list, item_to_find):
+    indices = []
+    for idx, value in enumerate(list):
+        if value == item_to_find:
+            indices.append(idx)
+    return indices
+
+
+def append_to_visible(coord):
+    if coord not in visible:
+        visible.append(coord)
+
+
+def search(line_index, line, orientation):
+    largest_item_in_list = max(line)
+    indices_of_largest_item = find_indices(line, largest_item_in_list)
+    # print("appending:", indices_of_largest_item[0], "and", indices_of_largest_item[-1])
+    if orientation == "horiz":
+        append_to_visible((line_index, indices_of_largest_item[0]))
+        append_to_visible((line_index, indices_of_largest_item[-1]))
+    else:
+        append_to_visible((indices_of_largest_item[0], line_index))
+        append_to_visible((indices_of_largest_item[-1], line_index))
+
+    search_left(line_index, line, indices_of_largest_item[0], orientation)
+    search_right(line_index, line, indices_of_largest_item[-1], orientation)
+
+
+def search_left(line_index, line, bound, orientation):
+    newline = line[0:bound]
+    # print("line:", line_index, "searching left:", newline)
+    if len(newline) > 0:
+        largest_item = max(newline)
+        # indices_of_largest_item = find_indices(newline, largest_item)
+        index_of_largest = line.index(largest_item)
+        if orientation == "horiz":
+            print("appending from left:", line_index, index_of_largest)
+            append_to_visible((line_index, index_of_largest))
+        else:
+            print("appending from left:", index_of_largest, line_index)
+            append_to_visible((index_of_largest, line_index))
+        search_left(line_index, line, index_of_largest, orientation)
+        return index_of_largest
+
+
+def search_right(line_index, line, bound, orientation):
+    newline = line[bound + 1 : len(line)]
+    # print("line:", line_index, "searching right:", newline)
+    if len(newline) > 0:
+        largest_item = max(newline)
+        indices_of_largest = find_indices(line, largest_item)
+        if orientation == "horiz":
+            # print("appending from right:", line_index, indices_of_largest[-1])
+            append_to_visible((line_index, indices_of_largest[-1]))
+        else:
+            # print("appending from right:", indices_of_largest[-1], line_index)
+            append_to_visible((indices_of_largest[-1], line_index))
+        if len(indices_of_largest) > 1:
+            search_right(line_index, line, indices_of_largest[-1], orientation)
+            return indices_of_largest[-1]
+
+
+vertical_lists = {}
 
 for ii, i in enumerate(forest):
-    print(ii, i)
+    search(ii, i, "horiz")
     for ij, j in enumerate(i):
-        print("location: ", ii, ",", ij, "height: ", j)
-        edists = edge_distances(ii, ij)
-        print(edists)
-        for key in edists.keys():
-            if search(j, ij, ij, forest, search_lambdas[key], key):
-                visible.append((ii, ij))
-                break
-    print(length, height)
+        edges = [0, len(i) - 1]
+        if ii in edges or ij in edges:
+            append_to_visible((ii, ij))
+        if ij not in vertical_lists.keys():
+            vertical_lists[ij] = [j]
+        else:
+            vertical_lists[ij].append(j)
 
-# check up, down, left right in a line
-# if no neighbours, node is edge
+for key, line in vertical_lists.items():
+    search(key, line, "vert")
 
-print(visible)
+
+# visible_sort = sorted(visible, key=lambda element: (element[0], element[1]))
+# print(visible_sort)
+print("num visible", len(visible))
